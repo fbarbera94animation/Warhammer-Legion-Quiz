@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Which Space Marine Legion Are You?</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <style>
+    :root{
+      --panel: rgba(0,0,0,0.78);
+      --border: rgba(255,255,255,0.16);
+      --text: #e0e0e0;
+      --muted: rgba(224,224,224,0.75);
+    }
+
+    body{
+      margin: 0;
+      font-family: Georgia, serif;
+      color: var(--text);
+      background: #000;
+      min-height: 100vh;
+    }
+
+    .hidden{ display:none !important; }
+
+    .panel{
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 40px 20px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      box-sizing: border-box;
+      backdrop-filter: blur(2px);
+    }
+
+    h1,h2,h3{ text-align:center; letter-spacing:1px; margin:0 0 16px; }
+    p{ margin:10px 0; }
+
+    /* START OVERLAY — guaranteed visible and on top */
+    #start-screen{
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      box-sizing: border-box;
+    }
+
+    .start-btn, .restart-btn{
+      margin-top: 18px;
+      padding: 12px 22px;
+      cursor: pointer;
+      background: #1c1c1c;
+      border: 1px solid #444;
+      color: var(--text);
+      font-size: 16px;
+    }
+    .start-btn:hover, .restart-btn:hover{ background:#2a2a2a; }
+
+    /* QUIZ AREA */
+    #main{
+      padding: 24px;
+      box-sizing: border-box;
+      min-height: 100vh;
+    }
+
+    .progress{
+      text-align:center;
+      margin: 0 0 18px;
+      color: var(--muted);
+    }
+
+    .question{ margin-bottom: 26px; }
+
+    .answers button{
+      display:block;
+      width:100%;
+      margin:10px 0;
+      padding:12px;
+      background:#1c1c1c;
+      border:1px solid #444;
+      color:var(--text);
+      cursor:pointer;
+      text-align:left;
+      box-sizing:border-box;
+    }
+    .answers button:hover{ background:#2a2a2a; }
+
+    #result img{
+      max-width: 320px;
+      width: 100%;
+      height:auto;
+      display:block;
+      margin: 18px auto 6px;
+      border: 1px solid var(--border);
+      background: rgba(0,0,0,0.35);
+    }
+
+    .credit{
+      text-align:center;
+      font-size:12px;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+
+    .result-block{
+      margin-top: 28px;
+      padding-top: 18px;
+      border-top: 1px solid var(--border);
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- START SCREEN OVERLAY -->
+  <div id="start-screen" aria-label="Start screen">
+    <div class="panel" style="text-align:center;">
+      <h1>LEGION AFFINITY TEST</h1>
+      <p style="color:var(--muted);">Answer instinctively. There are no right or wrong choices.</p>
+      <button class="start-btn" id="startBtn" type="button">Begin</button>
+    </div>
+  </div>
+
+  <!-- MAIN QUIZ -->
+  <div id="main">
+    <div class="panel">
+      <div class="progress" id="progress"></div>
+      <div id="quiz"></div>
+      <div id="result" class="hidden"></div>
+      <div style="text-align:center;">
+        <button class="restart-btn hidden" id="restartBtn" type="button">Restart</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* =========================================================
+   ASSET LOADING: supports files in ./ OR ./images/
+   ========================================================= */
+function tryPaths(filename){ return [`images/${filename}`, filename]; }
+
+function preloadFirstAvailable(filename, onOk, onFail){
+  const paths = tryPaths(filename);
+  let i = 0;
+  (function attempt(){
+    if(i >= paths.length) return onFail?.();
+    const img = new Image();
+    img.onload = () => onOk(paths[i]);
+    img.onerror = () => { i++; attempt(); };
+    img.src = paths[i];
+  })();
+}
+
+function createImgFromFilename(filename, altText){
+  const img = document.createElement("img");
+  img.alt = altText || "";
+  const paths = tryPaths(filename);
+  let i = 0;
+  function setSrc(){ img.src = paths[i]; }
+  img.onerror = () => { i++; if(i < paths.length) setSrc(); };
+  setSrc();
+  return img;
+}
+
+function extractArtistFromFilename(filename){
+  const m = filename.match(/_by(.+)\.(png|jpg|jpeg)$/i);
+  return m ? m[1].replace(/_/g," ") : "";
+}
+
+/* =========================================================
+   BACKGROUNDS
+   ========================================================= */
+function setBodyBg(filename){
+  preloadFirstAvailable(filename, (path)=>{
+    document.body.style.background = `url("${path}") center/cover no-repeat fixed`;
+    document.body.style.backgroundColor = "#000";
+  });
+}
+setBodyBg("start_background.jpg");
+
+/* =========================================================
+   QUESTIONS (15) — Luna Wolves pre-heresy
+   ========================================================= */
+const questions = [
+  { q:"When order collapses, what matters most?", a:[
+    {t:"Rebuilding clear structures", l:["Ultramarines","Imperial Fists"]},
+    {t:"Protecting those who cannot protect themselves", l:["Salamanders","Blood Angels"]},
+    {t:"Understanding why it failed", l:["Thousand Sons","Alpha Legion"]},
+    {t:"Acting swiftly to impose control", l:["Dark Angels","Night Lords"]},
+    {t:"Enduring until stability returns", l:["Death Guard","Iron Hands"]},
+    {t:"Adapting and moving forward", l:["White Scars","Raven Guard"]}
+  ]},
+  { q:"What gives meaning to effort?", a:[
+    {t:"Achieving excellence", l:["Emperor's Children","Blood Angels"]},
+    {t:"Serving a greater system", l:["Ultramarines","Imperial Fists"]},
+    {t:"Remaining loyal to others", l:["Dark Angels","Space Wolves"]},
+    {t:"Discovering deeper truth", l:["Thousand Sons","Alpha Legion"]},
+    {t:"Proving resilience", l:["Death Guard","Iron Hands"]},
+    {t:"Leaving a lasting legacy", l:["Word Bearers","Luna Wolves"]}
+  ]},
+  { q:"Which statement resonates most with you?", a:[
+    {t:"Strength must be refined", l:["Iron Hands","Emperor's Children"]},
+    {t:"Freedom requires discipline", l:["White Scars","Space Wolves"]},
+    {t:"Fear prevents chaos", l:["Night Lords","Dark Angels"]},
+    {t:"Compassion is not weakness", l:["Salamanders","Blood Angels"]},
+    {t:"Knowledge has a cost", l:["Thousand Sons","Alpha Legion"]},
+    {t:"Systems outlive individuals", l:["Ultramarines","Imperial Fists"]}
+  ]},
+  { q:"How do you view authority?", a:[
+    {t:"Necessary and stabilizing", l:["Ultramarines","Imperial Fists"]},
+    {t:"Earned through action", l:["White Scars","Space Wolves"]},
+    {t:"A burden to carry", l:["Death Guard","Salamanders"]},
+    {t:"A tool to guide others", l:["Dark Angels","Night Lords"]},
+    {t:"Something to question", l:["Thousand Sons","Alpha Legion"]},
+    {t:"Something to endure", l:["Iron Hands","World Eaters"]}
+  ]},
+  { q:"What is your relationship with rules?", a:[
+    {t:"They create stability", l:["Ultramarines","Imperial Fists"]},
+    {t:"They must serve purpose", l:["White Scars","Luna Wolves"]},
+    {t:"They should be tested", l:["Thousand Sons","Alpha Legion"]},
+    {t:"They protect the vulnerable", l:["Salamanders","Blood Angels"]},
+    {t:"They reveal character", l:["Iron Hands","Death Guard"]},
+    {t:"They are means, not ideals", l:["Night Lords","World Eaters"]}
+  ]},
+  { q:"When facing uncertainty, you rely on…", a:[
+    {t:"Preparation", l:["Ultramarines","Imperial Fists"]},
+    {t:"Instinct", l:["White Scars","Space Wolves"]},
+    {t:"Insight", l:["Thousand Sons","Alpha Legion"]},
+    {t:"Conviction", l:["Dark Angels","Night Lords"]},
+    {t:"Endurance", l:["Death Guard","Iron Hands"]},
+    {t:"Adaptability", l:["Raven Guard","Luna Wolves"]}
+  ]},
+  { q:"What do you respect most in others?", a:[
+    {t:"Discipline", l:["Ultramarines","Iron Hands"]},
+    {t:"Courage", l:["White Scars","Space Wolves"]},
+    {t:"Intelligence", l:["Thousand Sons","Alpha Legion"]},
+    {t:"Mercy", l:["Salamanders","Blood Angels"]},
+    {t:"Resolve", l:["Death Guard","Imperial Fists"]},
+    {t:"Ambition", l:["Emperor's Children","World Eaters"]}
+  ]},
+  { q:"Failure is best answered by…", a:[
+    {t:"Improvement", l:["Ultramarines","Iron Hands"]},
+    {t:"Acceptance", l:["Death Guard","Salamanders"]},
+    {t:"Understanding", l:["Thousand Sons","Alpha Legion"]},
+    {t:"Correction", l:["Dark Angels","Night Lords"]},
+    {t:"Persistence", l:["White Scars","Space Wolves"]},
+    {t:"Transformation", l:["Emperor's Children","Word Bearers"]}
+  ]},
+  { q:"Which role feels most natural to you?", a:[
+    {t:"Planner or designer", l:["Ultramarines","Imperial Fists"]},
+    {t:"Caregiver or protector", l:["Salamanders","Blood Angels"]},
+    {t:"Researcher or analyst", l:["Thousand Sons","Alpha Legion"]},
+    {t:"Law enforcer or regulator", l:["Dark Angels","Night Lords"]},
+    {t:"Survivor or frontline worker", l:["Death Guard","Iron Hands"]},
+    {t:"Explorer or pioneer", l:["White Scars","Raven Guard"]}
+  ]},
+  { q:"What is the greatest danger to society?", a:[
+    {t:"Disorder", l:["Ultramarines","Imperial Fists"]},
+    {t:"Weakness", l:["Salamanders","Blood Angels"]},
+    {t:"Ignorance", l:["Thousand Sons","Alpha Legion"]},
+    {t:"Corruption", l:["Night Lords","Dark Angels"]},
+    {t:"Despair", l:["Death Guard","Iron Hands"]},
+    {t:"Stagnation", l:["White Scars","Raven Guard"]}
+  ]},
+  { q:"How should strength be used?", a:[
+    {t:"Carefully", l:["Ultramarines","Iron Hands"]},
+    {t:"Decisively", l:["Dark Angels","Night Lords"]},
+    {t:"Wisely", l:["Thousand Sons","Alpha Legion"]},
+    {t:"Responsibly", l:["Salamanders","Blood Angels"]},
+    {t:"Relentlessly", l:["World Eaters","Death Guard"]},
+    {t:"Opportunistically", l:["White Scars","Raven Guard"]}
+  ]},
+  { q:"What do you fear most losing?", a:[
+    {t:"Control", l:["Ultramarines","Imperial Fists"]},
+    {t:"Freedom", l:["White Scars","Space Wolves"]},
+    {t:"Truth", l:["Thousand Sons","Alpha Legion"]},
+    {t:"Humanity", l:["Salamanders","Blood Angels"]},
+    {t:"Endurance", l:["Death Guard","Iron Hands"]},
+    {t:"Purpose", l:["Word Bearers","Emperor's Children"]}
+  ]},
+  { q:"Which idea feels closest to your beliefs?", a:[
+    {t:"Order creates peace", l:["Ultramarines","Imperial Fists"]},
+    {t:"Suffering tempers strength", l:["Iron Hands","World Eaters"]},
+    {t:"Knowledge defines progress", l:["Thousand Sons","Alpha Legion"]},
+    {t:"Hope must be preserved", l:["Salamanders","Blood Angels"]},
+    {t:"Fear maintains balance", l:["Night Lords","Dark Angels"]},
+    {t:"Change is survival", l:["White Scars","Raven Guard"]}
+  ]},
+  { q:"What motivates loyalty?", a:[
+    {t:"Shared values", l:["Ultramarines","Dark Angels"]},
+    {t:"Shared hardship", l:["White Scars","Space Wolves"]},
+    {t:"Shared vision", l:["Thousand Sons","Alpha Legion"]},
+    {t:"Shared belief", l:["Word Bearers","Luna Wolves"]},
+    {t:"Shared struggle", l:["Death Guard","Iron Hands"]},
+    {t:"Shared outcome", l:["Emperor's Children","World Eaters"]}
+  ]},
+  { q:"At the end of all things, what matters most?", a:[
+    {t:"Legacy", l:["Word Bearers","Luna Wolves"]},
+    {t:"Survival", l:["Death Guard","Iron Hands"]},
+    {t:"Truth", l:["Thousand Sons","Alpha Legion"]},
+    {t:"Protection", l:["Salamanders","Blood Angels"]},
+    {t:"Victory", l:["World Eaters","White Scars"]},
+    {t:"Meaning", l:["Ultramarines","Imperial Fists"]}
+  ]}
+];
+
+/* =========================================================
+   LEGION DATA + EXACT FILENAMES
+   ========================================================= */
+const legionData = {
+  "Alpha Legion":{primarch:"Alpharius / Omegon",desc:"You value outcomes over appearances. You think in systems, contingencies, and information asymmetry—truth is a tool, revealed or concealed as required.",files:{primarch:"primarch_alphalegion_byJohannes_Helgeson.jpg",logo:"logo_alphalegion_byUnknown.png",marine:"marine_alphalegion_byStephen_Sykes.jpg"}},
+  "Blood Angels":{primarch:"Sanguinius",desc:"You aim for nobility under pressure. You believe beauty, compassion, and high ideals matter most when circumstances encourage cynicism and brutality.",files:{primarch:"primarch_bloodangels_byGolden_Peach_Chen.jpg",logo:"logo_bloodangels_byCharlie_Brassley.png",marine:"marine_bloodangels_byJohan_Grenier.jpg"}},
+  "Dark Angels":{primarch:"Lion El’Jonson",desc:"You embody duty and restraint. You accept burdens others refuse, valuing loyalty, discretion, and uncompromising commitment to an internal code.",files:{primarch:"primarch_darkangels_byPreatorK.jpg",logo:"logo_darkangels_byCharlie_Brassley.png",marine:"marine_darkangels_byLucas_Öström.jpg"}},
+  "Death Guard":{primarch:"Mortarion",desc:"You believe endurance is the purest form of strength. You respect grit, sacrifice, and the ability to persist without illusion or self-pity.",files:{primarch:"primarch_deathguard_byGeorgy_Stacker.jpg",logo:"logo_deathguard_byUnknown.png",marine:"marine_deathguard_bySolomon_Anthony.jpg"}},
+  "Emperor's Children":{primarch:"Fulgrim",desc:"You pursue excellence without compromise. You value mastery, refinement, and raising standards—believing that what you create reflects who you are.",files:{primarch:"primarch_emperorschildren_byStephen_Sykes.jpg",logo:"logo_emperorschildren_byUnknown.png",marine:"marine_emperorschildren_byAleksey_Bashlay.jpg"}},
+  "Imperial Fists":{primarch:"Rogal Dorn",desc:"You value duty as a moral absolute. Responsibility is not negotiable, and protecting others often requires personal sacrifice and discipline.",files:{primarch:"primarch_imperialfists_byMohamed_Saad.jpg",logo:"logo_imperialfists_byCharlie_Brassley.png",marine:"marine_imperialfists_byToni_Justamante_Jacobs.jpg"}},
+  "Iron Hands":{primarch:"Ferrus Manus",desc:"You believe improvement is a responsibility. You value discipline and control, pursuing strength through self-mastery and the removal of weakness.",files:{primarch:"primarch_ironhands_byStephen_Sykes.jpg",logo:"logo_ironhands_byCharlie_Brassley.png",marine:"marine_ironhands_byZhi_Chen.jpg"}},
+  "Iron Warriors":{primarch:"Perturabo",desc:"You respect hard truths and difficult work. You believe victory often belongs to those who outlast everyone else.",files:{primarch:"primarch_ironwarriors_byTomás_Norambuena.jpg",logo:"logo_ironwarriors_byCharlie_Brassley.png",marine:"marine_ironwarriors_bySerdjek_Sholohovshek.jpg"}},
+  "Luna Wolves":{primarch:"Horus Lupercal",desc:"You align with unity and leadership. You believe morale, clarity of purpose, and decisive action can bind people together.",files:{primarch:"primarch_lunawolves_byStephen_Sykes.jpg",logo:"logo_lunawolves_byUnknown.png",marine:"marine_lunawolves_byGeorge_Earl_Abalayan.jpg"}},
+  "Night Lords":{primarch:"Konrad Curze",desc:"You believe order is maintained through consequence. Visible punishment prevents greater disorder.",files:{primarch:"primarch_nightlords_bySerdjek_Sholohovshek.jpg",logo:"logo_nightlords_byUnknown.png",marine:"marine_nightlords_byDaniel_Purnama.jpg"}},
+  "Raven Guard":{primarch:"Corvus Corax",desc:"You value freedom and conscience. You prefer precision over spectacle, believing subtle action prevents needless harm.",files:{primarch:"primarch_ravenguard_byJHArt.jpg",logo:"logo_ravenguard_byCharlie_Brassley.png",marine:"marine_ravenguard_byArtur_Nakhodkin.jpg"}},
+  "Salamanders":{primarch:"Vulkan",desc:"You believe strength exists to protect life. You value empathy, stewardship, and using power responsibly.",files:{primarch:"primarch_salamanders_byDaniel_Batista.jpg",logo:"logo_salamanders_byCharlie_Brassley.png",marine:"marine_salamanders_byJaime_Martinez.jpg"}},
+  "Space Wolves":{primarch:"Leman Russ",desc:"You value loyalty and instinct. You respect courage, directness, and the bonds of a tribe—character is revealed through action.",files:{primarch:"primarch_spacewolves_byStephen_Sykes.jpg",logo:"logo_spacewolves_byCharlie_Brassley.png",marine:"marine_spacewolves_byCoffee_Time.jpg"}},
+  "Thousand Sons":{primarch:"Magnus the Red",desc:"You value knowledge and understanding. You believe ignorance is the root of catastrophe, and mastery comes from seeking truth beyond the obvious.",files:{primarch:"primarch_thousandsons_byStephen_Sykes.jpg",logo:"logo_thousandsuns_byUnknown.png",marine:"marine_thousandsuns_byDaniel_Batista.jpg"}},
+  "Ultramarines":{primarch:"Roboute Guilliman",desc:"You value structure and governance. You believe law and planning create stability—and stability enables human flourishing.",files:{primarch:"primarch_ultramarines_byIgor_Sid.jpg",logo:"logo_ultramarines_byCharlie_Brassley.png",marine:"marine_ultramarines_byAli_Shimhaq.jpg"}},
+  "White Scars":{primarch:"Jaghatai Khan",desc:"You value freedom and adaptability. You believe rigidity is fragility, and survival belongs to those who can move and decide quickly.",files:{primarch:"primarch_whitescars_byVitaly_Perevoshikov.jpg",logo:"logo_whitescars_byCharlie_Brassley.png",marine:"marine_whitescars_byAkim_Kaliberda.jpg"}},
+  "Word Bearers":{primarch:"Lorgar Aurelian",desc:"You value meaning and conviction. You believe people need purpose to endure, and communities are shaped by shared narratives.",files:{primarch:"primarch_wordbearers_byMarat_Tazhitdinov.jpg",logo:"logo_wordbearers_byUnknown.png",marine:"marine_wordbearers_byMisha_Savier.jpg"}},
+  "World Eaters":{primarch:"Angron",desc:"You value intensity and directness. You believe commitment is proven through decisive action and refusal to waver.",files:{primarch:"primarch_worldeaters_byChevron_Lowery.jpg",logo:"logo_worldeaters_byUnknown.png",marine:"marine_worldeaters_byGeorge_Earl_Abalayan.jpg"}}
+};
+
+/* =========================================================
+   SINGLE WINNER (no dual results): deterministic tie-break
+   ========================================================= */
+let scores = {};
+let tieBreak = {};
+let current = 0;
+
+/* DOM */
+const startBtn = document.getElementById("startBtn");
+const restartBtn = document.getElementById("restartBtn");
+const startScreen = document.getElementById("start-screen");
+const progress = document.getElementById("progress");
+const quiz = document.getElementById("quiz");
+const result = document.getElementById("result");
+
+/* Start */
+startBtn.addEventListener("click", () => {
+  setBodyBg("quiz_background.jpg");
+
+  // Remove overlay completely
+  startScreen.remove();
+
+  scores = {};
+  tieBreak = {};
+  current = 0;
+
+  result.classList.add("hidden");
+  restartBtn.classList.add("hidden");
+  quiz.classList.remove("hidden");
+  progress.classList.remove("hidden");
+
+  window.scrollTo(0,0);
+  renderQuestion();
+});
+
+/* Restart returns to start by reloading (simple and reliable) */
+restartBtn.addEventListener("click", () => location.reload());
+
+function renderQuestion(){
+  quiz.innerHTML = "";
+
+  if(current >= questions.length){
+    showSingleResult();
+    return;
+  }
+
+  const q = questions[current];
+
+  const qWrap = document.createElement("div");
+  qWrap.className = "question";
+  qWrap.innerHTML = `<h2>${q.q}</h2>`;
+
+  const answers = document.createElement("div");
+  answers.className = "answers";
+
+  q.a.forEach((ans, ansIndex) => {
+    const btn = document.createElement("button");
+    btn.textContent = ans.t;
+    btn.onclick = () => {
+      ans.l.forEach(l => {
+        scores[l] = (scores[l] || 0) + 1;
+        // deterministic tie-break (tiny weights)
+        tieBreak[l] = (tieBreak[l] || 0) + ((current + 1) / 1000) + ((ansIndex + 1) / 100000);
+      });
+      current++;
+      renderQuestion();
+    };
+    answers.appendChild(btn);
+  });
+
+  qWrap.appendChild(answers);
+  quiz.appendChild(qWrap);
+
+  progress.textContent = `Question ${current + 1} of ${questions.length}`;
+}
+
+function showSingleResult(){
+  quiz.classList.add("hidden");
+  progress.classList.add("hidden");
+  restartBtn.classList.remove("hidden");
+  result.classList.remove("hidden");
+  result.innerHTML = "";
+
+  const all = Object.keys(legionData);
+  let winner = all[0];
+
+  for(const l of all){
+    const sL = scores[l] || 0;
+    const sW = scores[winner] || 0;
+
+    if(sL > sW) { winner = l; continue; }
+    if(sL === sW){
+      const tL = tieBreak[l] || 0;
+      const tW = tieBreak[winner] || 0;
+      if(tL > tW) { winner = l; continue; }
+      if(tL === tW && l.localeCompare(winner) < 0) winner = l;
+    }
+  }
+
+  const data = legionData[winner];
+
+  const header = document.createElement("h2");
+  header.textContent = "Your Legion";
+  result.appendChild(header);
+
+  const nameLine = document.createElement("p");
+  nameLine.style.color = "var(--muted)";
+  nameLine.textContent = winner;
+  result.appendChild(nameLine);
+
+  const block = document.createElement("div");
+  block.className = "result-block";
+
+  const title = document.createElement("h2");
+  title.textContent = winner;
+  block.appendChild(title);
+
+  const prim = document.createElement("p");
+  prim.innerHTML = `<strong>Primarch:</strong> ${data.primarch}`;
+  block.appendChild(prim);
+
+  const desc = document.createElement("p");
+  desc.textContent = data.desc;
+  block.appendChild(desc);
+
+  appendImageAndCredit(block, data.files.primarch, `${winner} Primarch`);
+  appendImageAndCredit(block, data.files.logo, `${winner} Legion Logo`);
+  appendImageAndCredit(block, data.files.marine, `${winner} Space Marine`);
+
+  result.appendChild(block);
+}
+
+function appendImageAndCredit(container, filename, altText){
+  const img = createImgFromFilename(filename, altText);
+  container.appendChild(img);
+
+  const artist = extractArtistFromFilename(filename);
+  const credit = document.createElement("div");
+  credit.className = "credit";
+  credit.textContent = artist ? `Art by ${artist}` : "";
+  container.appendChild(credit);
+}
+</script>
+</body>
+</html>
